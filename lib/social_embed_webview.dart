@@ -25,6 +25,7 @@ class _SocialEmbedState extends State<SocialEmbed> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    wbController = WebViewController();
     // htmlBody = ;
     if (widget.socialMediaObj.supportMediaControll)
       WidgetsBinding.instance!.addObserver(this);
@@ -41,44 +42,58 @@ class _SocialEmbedState extends State<SocialEmbed> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
-        break;
-      case AppLifecycleState.detached:
-        wbController.evaluateJavascript(widget.socialMediaObj.stopVideoScript);
+        // App is visible and running
         break;
       case AppLifecycleState.inactive:
+        // App is inactive, usually when in the foreground but not responding to user input
+        wbController.runJavaScript(widget.socialMediaObj.pauseVideoScript);
+        break;
       case AppLifecycleState.paused:
-        wbController.evaluateJavascript(widget.socialMediaObj.pauseVideoScript);
+        // App is not visible to the user, like in background
+        wbController.runJavaScript(widget.socialMediaObj.pauseVideoScript);
+        break;
+      case AppLifecycleState.detached:
+        // App is detached, like when it is closed
+        wbController.runJavaScript(widget.socialMediaObj.stopVideoScript);
+        break;
+      case AppLifecycleState.hidden:
+        // App is hidden (specific to certain platforms like Android)
+        wbController.runJavaScript(widget.socialMediaObj.pauseVideoScript);
         break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final wv = WebView(
-        initialUrl: htmlToURI(getHtmlBody()),
-        javascriptChannels:
-            <JavascriptChannel>[_getHeightJavascriptChannel()].toSet(),
-        javascriptMode: JavascriptMode.unrestricted,
-        initialMediaPlaybackPolicy: AutoMediaPlaybackPolicy.always_allow,
-        onWebViewCreated: (wbc) {
-          wbController = wbc;
-        },
-        onPageFinished: (str) {
-          final color = colorToHtmlRGBA(getBackgroundColor(context));
-          wbController.evaluateJavascript(
-              'document.body.style= "background-color: $color"');
-          if (widget.socialMediaObj.aspectRatio == null)
-            wbController
-                .evaluateJavascript('setTimeout(() => sendHeight(), 0)');
-        },
-        navigationDelegate: (navigation) async {
-          final url = navigation.url;
-          if (navigation.isForMainFrame && await canLaunch(url)) {
-            launch(url);
-            return NavigationDecision.prevent;
-          }
-          return NavigationDecision.navigate;
-        });
+    final wv = WebViewWidget(
+      controller: wbController
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..addJavaScriptChannel(
+          'PageHeight',
+          onMessageReceived: _getHeightJavascriptChannel,
+        )
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (str) {
+              final color = colorToHtmlRGBA(getBackgroundColor(context));
+              wbController.runJavaScript(
+                  'document.body.style= "background-color: $color"');
+              if (widget.socialMediaObj.aspectRatio == null) {
+                wbController.runJavaScript('setTimeout(() => sendHeight(), 0)');
+              }
+            },
+            onNavigationRequest: (navigation) async {
+              final url = navigation.url;
+              if (await canLaunchUrl(Uri.parse(url))) {
+                launchUrl(Uri.parse(url));
+                return NavigationDecision.prevent;
+              }
+              return NavigationDecision.navigate;
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse(htmlToURI(getHtmlBody()))),
+    );
     final ar = widget.socialMediaObj.aspectRatio;
     return (ar != null)
         ? ConstrainedBox(
@@ -91,12 +106,8 @@ class _SocialEmbedState extends State<SocialEmbed> with WidgetsBindingObserver {
         : SizedBox(height: _height, child: wv);
   }
 
-  JavascriptChannel _getHeightJavascriptChannel() {
-    return JavascriptChannel(
-        name: 'PageHeight',
-        onMessageReceived: (JavascriptMessage message) {
-          _setHeight(double.parse(message.message));
-        });
+  void _getHeightJavascriptChannel(JavaScriptMessage message) {
+    _setHeight(double.parse(message.message));
   }
 
   void _setHeight(double height) {

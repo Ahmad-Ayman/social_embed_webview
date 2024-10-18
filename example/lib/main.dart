@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:social_embed_webview/platforms/facebook-video.dart';
 import 'package:social_embed_webview/platforms/facebook-post.dart';
-import 'package:social_embed_webview/platforms/youtube.dart';
+import 'package:social_embed_webview/platforms/facebook-video.dart';
 import 'package:social_embed_webview/platforms/instagram.dart';
 import 'package:social_embed_webview/platforms/twitter.dart';
+import 'package:social_embed_webview/platforms/youtube.dart';
 import 'package:social_embed_webview/social_embed_webview.dart';
 
 /// <srcipts>...</scripts> tag has been removed
@@ -34,7 +34,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
           primarySwatch: Colors.blue,
           visualDensity: VisualDensity.adaptivePlatformDensity,
-          backgroundColor: Colors.white),
+          scaffoldBackgroundColor: Colors.white),
       home: SafeArea(
         child: Scaffold(
           appBar: AppBar(
